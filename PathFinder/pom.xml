@@ -8,19 +8,44 @@
   <name>PathFinder Maven Webapp</name>
   <url>http://maven.apache.org</url>
  
-	<properties>
+ 
+ 
+ 
+<properties>
+	<maven.compiler.source>1.8</maven.compiler.source>
+   		<maven.compiler.target>1.8</maven.compiler.target>
 		<springframework.version>4.2.0.RELEASE</springframework.version>
 		<jackson.version>2.5.3</jackson.version>
 			<mysql.connector.version>5.1.31</mysql.connector.version>
 	
 	</properties>
 	<dependencies>
+	
+<!-- JSONObject -->
+<dependency>
+   		<groupId>org.json</groupId>
+   		<artifactId>json</artifactId>
+   		<version>20080701</version>
+	</dependency>
+	
+<dependency>
+<groupId>com.googlecode.json-simple</groupId>
+<artifactId>json-simple</artifactId>
+<version>1.1</version>
+  </dependency>
+	<!-- Email -->
 
+ <dependency>
+	    <groupId>javax.mail</groupId>
+	    <artifactId>mail</artifactId>
+	    <version>1.4.3</version>
+    </dependency>
 		<!-- Spring -->
+		
 <dependency>
   <groupId>commons-codec</groupId>
   <artifactId>commons-codec</artifactId>
-  <version>20041127.091804</version>
+  <version>1.7</version>
 </dependency>
 	<dependency>
 			<groupId>org.springframework</groupId>
@@ -120,20 +145,20 @@
 
 
 	<build>
-<pluginManagement>
-<plugins>
-<plugin>
-<groupId>org.apache.tomcat.maven</groupId>
-<artifactId>tomcat7-maven-plugin</artifactId>
-<version>2.2</version>
-<configuration>
-<warSourceDirectory>src/main/webapp</warSourceDirectory>
-<warName>PathFinder</warName>
-<failOnMissingWebXml>false</failOnMissingWebXml>
-</configuration>
-</plugin>
-</plugins>
-</pluginManagement>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.tomcat.maven</groupId>
+                <artifactId>tomcat7-maven-plugin</artifactId>
+                <version>2.2</version>
+					<configuration>
+						<warSourceDirectory>src/main/webapp</warSourceDirectory>
+						<warName>PathFinder</warName>
+						<failOnMissingWebXml>false</failOnMissingWebXml>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
     <finalName>PathFinder</finalName>
   </build>
 </project>

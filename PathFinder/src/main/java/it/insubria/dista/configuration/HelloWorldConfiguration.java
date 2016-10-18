@@ -4,7 +4,9 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.context.support.ResourceBundleMessageSource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
@@ -15,7 +17,7 @@ import org.springframework.web.servlet.view.JstlView;
 
 @Configuration
 @EnableWebMvc
-@ComponentScan(basePackages = "it.insubria.dista")
+@ComponentScan(basePackages = "it.insubria.dista;")
 public class HelloWorldConfiguration extends WebMvcConfigurerAdapter{
 	
 	@Override
@@ -37,6 +39,12 @@ public class HelloWorldConfiguration extends WebMvcConfigurerAdapter{
 		    messageSource.setBasename("messages");
 		    return messageSource;
 		}
+	 @Bean
+	    public static PropertySourcesPlaceholderConfigurer placeholderConfigurer() {
+	        PropertySourcesPlaceholderConfigurer c = new PropertySourcesPlaceholderConfigurer();
+	        c.setLocation(new ClassPathResource("application.properties"));
+	        return c;
+	    }   
 	    
 	    /**Optional. It's only required when handling '.' in @PathVariables which otherwise ignore everything after last '.' in @PathVaidables argument.
 	     * It's a known bug in Spring [https://jira.spring.io/browse/SPR-6164], still present in Spring 4.1.7.

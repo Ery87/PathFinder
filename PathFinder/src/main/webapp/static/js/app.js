@@ -12,12 +12,6 @@
 					templateUrl: 'WEB-INF/views/UserManagement.jsp'
 		})
 		
-			
-		.when('/registration',{
-					controller:'EvalController',
-					templateUrl: 'WEB-INF/views/registration.jsp'
-		})
-
 		
 			.otherwise({redirectTo:'/'});
 		}]);

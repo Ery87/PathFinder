@@ -1,7 +1,7 @@
 package it.insubria.dista.Polynomials;
 
-import it.insubria.dista.exceptions.ExcessiveDegreeException;
-import it.insubria.dista.exceptions.NegativeDegreeException;
+import it.insubria.dista.Exceptions.ExcessiveDegreeException;
+import  it.insubria.dista.Exceptions.NegativeDegreeException;
 
 import java.math.*;
 import java.util.ArrayList;
@@ -34,7 +34,6 @@ public class Polynomial {
 	}
 	
 	public Polynomial(String polynomial) {
-		
 		this.coefficients = new LinkedList<BigInteger>();
 		for (String coefficient : polynomial.split(" ")) {
 			coefficients.add(new BigInteger(coefficient));

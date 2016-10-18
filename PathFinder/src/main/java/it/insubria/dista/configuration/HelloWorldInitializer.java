@@ -1,8 +1,7 @@
 package it.insubria.dista.configuration;
 
 import javax.servlet.Filter;
-import javax.servlet.MultipartConfigElement;
-import javax.servlet.ServletRegistration;
+
 
 import org.springframework.web.servlet.support.AbstractAnnotationConfigDispatcherServletInitializer;
 
@@ -29,4 +28,5 @@ public class HelloWorldInitializer extends AbstractAnnotationConfigDispatcherSer
     	return singleton;
 	}
  
-   }
+   
+  }
