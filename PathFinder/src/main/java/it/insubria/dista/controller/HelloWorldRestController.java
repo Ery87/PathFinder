@@ -26,8 +26,10 @@ import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -104,6 +106,14 @@ public class HelloWorldRestController {
 	
 	@Value("${public_exponent}")
 	private BigInteger public_exponent;
+	
+	@Value("${modulus_KMS}")
+	private BigInteger modulus_KMS;
+	
+
+	@Value("${public_exponent_KMS}")
+	private BigInteger public_exponent_KMS;
+	
 	
 	private final static ExecutorService executor=Executors.newCachedThreadPool();
   
@@ -335,7 +345,7 @@ public class HelloWorldRestController {
 
     	//Download MODIFICARE
     	@RequestMapping(value="/evaluationRequest/",method=RequestMethod.POST)
-    	public void evaluationRequest(HttpServletResponse res,HttpServletRequest req) throws IOException, JSONException{
+    	public void evaluationRequest(HttpServletResponse res,HttpServletRequest req) throws IOException, JSONException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException{
         	PrintWriter pw=null;
         	int found=0;
     		StringBuilder sb = new StringBuilder();
@@ -344,12 +354,22 @@ public class HelloWorldRestController {
             while ((str = br.readLine()) != null) {
                 sb.append(str);
             }
-            JSONObject message = new JSONObject(sb.toString());
         	
+        	RSAPrivateKeySpec spec = new RSAPrivateKeySpec(modulus,private_exponent);
+        	KeyFactory factory = KeyFactory.getInstance("RSA");
+        	PrivateKey privKey = factory.generatePrivate(spec);
+        	
+            byte [] encryptedmsgfromRMS=sb.toString().getBytes();
+    		Cipher cipher = Cipher.getInstance("RSA");
+    		cipher.init(Cipher.DECRYPT_MODE, privKey);
+    		byte [] decryptedmsgfromRMS=blockCipher(encryptedmsgfromRMS,Cipher.DECRYPT_MODE, cipher);	
+            
+            JSONObject message=new JSONObject(decryptedmsgfromRMS.toString());
+   
     		BigInteger idRequestor=new BigInteger(""+message.getInt("idRequestor"));
     		BigInteger idOwner=new BigInteger(""+message.getInt("idOwner"));
     		Integer rule=message.getInt("ruleRsc");
-    		Integer idResource=message.getInt("idResource");
+    		String msgtoKMS=message.getString("msgtoKMS");
     		
     		BigInteger eval;
     		UserData requestor = new UserData(idRequestor);
@@ -386,11 +406,19 @@ public class HelloWorldRestController {
     		
     		
     		pw=res.getWriter();
-    		JSONObject json=new JSONObject();
-    		json.put("idRequestor", idRequestor);
-    		json.put("idResource", idResource);
-    		json.put("found", found);
+    		JSONObject jsonToKMS=new JSONObject();
+    		jsonToKMS.put("msgtoKMS", msgtoKMS);	
+    		jsonToKMS.put("found", found);
     		
+    		RSAPublicKeySpec spec_public = new RSAPublicKeySpec(modulus_KMS,public_exponent_KMS);
+        	factory = KeyFactory.getInstance("RSA");
+        	PublicKey publicKey_KMS = factory.generatePublic(spec_public);
+        	
+            byte [] encryptedmsgtoKMS=sb.toString().getBytes();
+    		cipher = Cipher.getInstance("RSA");
+    		cipher.init(Cipher.ENCRYPT_MODE, publicKey_KMS);
+    		encryptedmsgtoKMS=blockCipher(encryptedmsgtoKMS,Cipher.ENCRYPT_MODE, cipher);	
+            
     		
     		
     		URL url = new URL("http://193.206.170.148/KMS/evaluationInProcess/");						//INVIA IL MSG A PFS CON RICHIESTA DI EVALUATION
@@ -400,10 +428,10 @@ public class HelloWorldRestController {
    		   urlConnection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
    		   urlConnection.connect();
    		   OutputStream outputStream = urlConnection.getOutputStream();
-   		   outputStream.write(json.toString().getBytes());		
+   		   outputStream.write(encryptedmsgtoKMS.toString().getBytes());		
    		   outputStream.flush();
    		   
-   		   BufferedReader reader = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+   		  BufferedReader reader = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
 		   
 
 	       StringBuffer responseFromKMS = new StringBuffer(); 
@@ -413,12 +441,66 @@ public class HelloWorldRestController {
 	    	 responseFromKMS.append('\r');
 	       }
 	       
-	 
-	       
 	       pw.println(responseFromKMS.toString());
+
     		
     	}
     	
+    	private static byte[] blockCipher(byte[] bytes, int mode, Cipher cipher) throws IllegalBlockSizeException, BadPaddingException{
+    		// string initialize 2 buffers.
+    		// scrambled will hold intermediate results
+    		byte[] scrambled = new byte[0];
+
+    		// toReturn will hold the total result
+    		byte[] toReturn = new byte[0];
+    		// if we encrypt we use 100 byte long blocks. Decryption requires 128 byte long blocks (because of RSA)
+    		int length = (1024 / 8 ) - 11 ;
+
+    		// another buffer. this one will hold the bytes that have to be modified in this step
+    		byte[] buffer = new byte[length];
+
+    		for (int i=0; i< bytes.length; i++){
+
+    			// if we filled our buffer array we have our block ready for de- or encryption
+    			if ((i > 0) && (i % length == 0)){
+    				//execute the operation
+    				scrambled = cipher.doFinal(buffer);
+    				// add the result to our total result.
+    				toReturn = append(toReturn,scrambled);
+    				// here we calculate the length of the next buffer required
+    				int newlength = length;
+
+    				// if newlength would be longer than remaining bytes in the bytes array we shorten it.
+    				if (i + length > bytes.length) {
+    					 newlength = bytes.length - i;
+    				}
+    				// clean the buffer array
+    				buffer = new byte[newlength];
+    			}
+    			// copy byte into our buffer.
+    			buffer[i%length] = bytes[i];
+    		}
+    		// this step is needed if we had a trailing buffer. should only happen when encrypting.
+    		// example: we encrypt 110 bytes. 100 bytes per run means we "forgot" the last 10 bytes. they are in the buffer array
+    		scrambled = cipher.doFinal(buffer);
+
+    		// final step before we can return the modified data.
+    		toReturn = append(toReturn,scrambled);
+
+    		return toReturn;
+    	}
     	
+    	private static byte[] append(byte[] prefix, byte[] suffix){
+    		byte[] toReturn = new byte[prefix.length + suffix.length];
+    		for (int i=0; i< prefix.length; i++){
+    			toReturn[i] = prefix[i];
+    		}
+    		for (int i=0; i< suffix.length; i++){
+    			toReturn[i+prefix.length] = suffix[i];
+    		}
+    		return toReturn;
+    	}
     	
-}
+    		
+    		
+} 	
