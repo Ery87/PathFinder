@@ -59,6 +59,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
 import org.json.HTTP;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -119,81 +121,111 @@ public class HelloWorldRestController {
   
     //------------------Creation user--------------------------------------------------------
 
-    	@RequestMapping(value="/userInsertion",method=RequestMethod.POST)
-    	public void userInsertion(HttpServletResponse res,@RequestBody String uid) throws IOException, JSONException{
-    		
-    		String query;
-    		PathFinderService PFS=null;
-    		try {
-    			
-    			Class.forName("com.mysql.jdbc.Driver").newInstance();
-    			Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/PFS","root","tomcat@dicom");
-    			Statement state = connection.createStatement();
+	@RequestMapping(value="/userInsertion",method=RequestMethod.POST)
+	public void userInsertion(HttpServletResponse res,@RequestBody String uid) throws IOException, JSONException{
+		
+		String query;
+		PathFinderService PFS=null;
+		try {
+			
+			Class.forName("com.mysql.jdbc.Driver").newInstance();
+			Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/PFS","root","tomcat@dicom");
+			Statement state = connection.createStatement();
 
-    			
-    			ResultSet rs = state.executeQuery("show tables;");
-    			boolean empty = true;
-    			while (rs.next()) {
-    				if (rs.getString("Tables_in_PFS").equals("polynomials")) {
-    					empty = false;
-    				}
-    			}
-    			
-    			if (empty) {
+			
+			ResultSet rs = state.executeQuery("show tables;");
+			boolean empty = true;
+			while (rs.next()) {
+				if (rs.getString("Tables_in_PFS").equals("polynomials")) {
+					empty = false;
+				}
+			}
+			
+			if (empty) {
 
-    				String create = "CREATE TABLE IF NOT EXISTS polynomials (row_id BIGINT NOT NULL AUTO_INCREMENT UNIQUE KEY, uid VARCHAR(10000)";
-    				for (int i=1; i<=UserData.MAX_DEPTH; i++) {
-    					create += ", polyLv"+i+" LONGTEXT";
-    				}
-    				create += ");";
-    				
-    				state.executeUpdate(create);
-    				
-    			}
-    			else{
-    				PFS.restore();
-    				if(new UserData(new BigInteger(""+uid+"")).exists()){
-    					throw new ExistingUserExcepion("User already exists");
-    				}
-    			}
-    			connection.close();
+				String create = "CREATE TABLE IF NOT EXISTS polynomials (row_id BIGINT NOT NULL AUTO_INCREMENT UNIQUE KEY, uid VARCHAR(10000)";
+				for (int i=1; i<=UserData.MAX_DEPTH; i++) {
+					create += ", polyLv"+i+" LONGTEXT";
+				}
+				create += ");";
 				
+				state.executeUpdate(create);
 				PFS = PathFinderService.getInstance();
-				new UserData(new BigInteger(""+uid+""), new Polynomial(new BigInteger("1")));
-				PrintWriter pw=null;
-				try{
-		          	pw = res.getWriter();    	 	
-		        	pw.println("ok");
-		        	}catch(Exception ex)
-		          	{
-		          	pw.println("{");
-		          	pw.println("\"successful\": false,");
-		          	pw.println("\"message\": \""+ex.getMessage()+"\",");
-		          	pw.println("}");
-		          	return;
-		          	}
-    		} catch (Exception e) {
-    			e.printStackTrace();
-    		}
-	
-    	}
-    	
+				connection.close();
+			}
+			else{
+				PFS.restore();
+				if(new UserData(new BigInteger(""+uid+"")).exists()){
+					throw new ExistingUserExcepion("User already exists");
+				}
+			}
+			
+			
+			
+			new UserData(new BigInteger(""+uid+""), new Polynomial(new BigInteger("1")));
+			PrintWriter pw=null;
+			
+			try{
+	          	pw = res.getWriter();    	 	
+	        	pw.println("ok");
+	        	}catch(Exception ex)
+	          	{
+	          	pw.println("{");
+	          	pw.println("\"successful\": false,");
+	          	pw.println("\"message\": \""+ex.getMessage()+"\",");
+	          	pw.println("}");
+	          	return;
+	          	}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+	}
         //-------------------Evaluation directs friendship --------------------------------------------------------
 
        	@RequestMapping(value="/evaluationFriendship/",method=RequestMethod.POST)
-    	public void evaluationFriendship(HttpServletResponse res,HttpServletRequest req) throws IOException, JSONException{
-       		PrintWriter pw=null;
+    	public void evaluationFriendship(HttpServletResponse res,HttpServletRequest req,@RequestBody String messageToPFS) throws IOException, JSONException, NoSuchAlgorithmException, InvalidKeySpecException{
        		int evaluation=0;
-    		StringBuilder sb = new StringBuilder();
-            BufferedReader br = req.getReader();
-            String str = null;
-            while ((str = br.readLine()) != null) {
-                sb.append(str);
-            }
-            JSONObject message = new JSONObject(sb.toString());
+       		PrintWriter pw=null;
+       		RSAPrivateKeySpec spec = new RSAPrivateKeySpec(modulus,private_exponent);
+        	KeyFactory factory = KeyFactory.getInstance("RSA");
+        	PrivateKey privKey = factory.generatePrivate(spec);
         	
-    		BigInteger idSessionUser=new BigInteger(""+message.getInt("idSessionUser"));
-    		BigInteger idSearchedUser=new BigInteger(""+message.getInt("idSearchedUser"));
+     		Cipher cipher;
+     		byte[] dectyptedText = new byte[1];
+     		
+            try {
+              cipher = javax.crypto.Cipher.getInstance("RSA");
+              
+              byte[] messaggioCifratoBytes = new byte[256];
+
+              BigInteger messaggioCifrato = new BigInteger(messageToPFS, 16);
+              if (messaggioCifrato.toByteArray().length > 256) {
+                  for (int i=1; i<257; i++) {
+                	  messaggioCifratoBytes[i-1] = messaggioCifrato.toByteArray()[i];
+                  }
+              } else {
+            	  messaggioCifratoBytes = messaggioCifrato.toByteArray();
+              }
+             
+              cipher.init(Cipher.DECRYPT_MODE, privKey);
+              dectyptedText = cipher.doFinal(messaggioCifratoBytes);
+              } catch(NoSuchAlgorithmException e) {
+            	  System.out.println(e);
+              } catch(NoSuchPaddingException e) { 
+            	  System.out.println(e);
+              } catch(InvalidKeyException e) {
+            	  System.out.println(e);
+              } catch(IllegalBlockSizeException e) {
+            	  System.out.println(e);
+              } catch(BadPaddingException e) {
+            	  System.out.println(e);
+              }
+              String messaggioDecifrato = new String(dectyptedText);
+              JSONObject message = new JSONObject(messaggioDecifrato);
+            
+    		BigInteger idSessionUser=new BigInteger(""+message.getInt("sessionUser"));
+    		BigInteger idSearchedUser=new BigInteger(""+message.getInt("searchedUser"));
     		BigInteger eval;
     		UserData requestor = new UserData(idSearchedUser);
     		UserData owner = new UserData(idSessionUser);
@@ -345,7 +377,7 @@ public class HelloWorldRestController {
 
     	//Download MODIFICARE
     	@RequestMapping(value="/evaluationRequest/",method=RequestMethod.POST)
-    	public void evaluationRequest(HttpServletResponse res,HttpServletRequest req) throws IOException, JSONException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException{
+    	public void evaluationRequest(HttpServletResponse res,HttpServletRequest req) throws IOException, JSONException, NoSuchAlgorithmException, InvalidKeySpecException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, DecoderException{
         	PrintWriter pw=null;
         	int found=0;
     		StringBuilder sb = new StringBuilder();
@@ -359,18 +391,20 @@ public class HelloWorldRestController {
         	KeyFactory factory = KeyFactory.getInstance("RSA");
         	PrivateKey privKey = factory.generatePrivate(spec);
         	
-            byte [] encryptedmsgfromRMS=sb.toString().getBytes();
+            byte [] encryptedmsgfromRMS=Hex.decodeHex(sb.toString().toCharArray()); 
     		Cipher cipher = Cipher.getInstance("RSA");
     		cipher.init(Cipher.DECRYPT_MODE, privKey);
     		byte [] decryptedmsgfromRMS=blockCipher(encryptedmsgfromRMS,Cipher.DECRYPT_MODE, cipher);	
             
-            JSONObject message=new JSONObject(decryptedmsgfromRMS.toString());
+            JSONObject message=new JSONObject(new String(decryptedmsgfromRMS,"UTF-8").toString());
    
     		BigInteger idRequestor=new BigInteger(""+message.getInt("idRequestor"));
     		BigInteger idOwner=new BigInteger(""+message.getInt("idOwner"));
     		Integer rule=message.getInt("ruleRsc");
     		String msgtoKMS=message.getString("msgtoKMS");
-    		
+    		if(idRequestor.equals(idOwner)){
+    			found=1;
+    		}else{
     		BigInteger eval;
     		UserData requestor = new UserData(idRequestor);
     		UserData owner = new UserData(idOwner);
@@ -402,7 +436,7 @@ public class HelloWorldRestController {
     					cont=cont-1;
     				}								
     		}
-    		
+    		}
     		
     		
     		pw=res.getWriter();
@@ -414,12 +448,17 @@ public class HelloWorldRestController {
         	factory = KeyFactory.getInstance("RSA");
         	PublicKey publicKey_KMS = factory.generatePublic(spec_public);
         	
-            byte [] encryptedmsgtoKMS=sb.toString().getBytes();
+        	
+        	
+        	
+            byte [] encryptedmsgtoKMS=jsonToKMS.toString().getBytes("UTF-8");
     		cipher = Cipher.getInstance("RSA");
     		cipher.init(Cipher.ENCRYPT_MODE, publicKey_KMS);
     		encryptedmsgtoKMS=blockCipher(encryptedmsgtoKMS,Cipher.ENCRYPT_MODE, cipher);	
             
-    		
+    		char[] encryptedTranspherable = Hex.encodeHex(encryptedmsgtoKMS);
+   		   	String strmsgencrypted=new String(encryptedTranspherable);
+        	
     		
     		URL url = new URL("http://193.206.170.148/KMS/evaluationInProcess/");						//INVIA IL MSG A PFS CON RICHIESTA DI EVALUATION
        		
@@ -428,7 +467,7 @@ public class HelloWorldRestController {
    		   urlConnection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
    		   urlConnection.connect();
    		   OutputStream outputStream = urlConnection.getOutputStream();
-   		   outputStream.write(encryptedmsgtoKMS.toString().getBytes());		
+   		   outputStream.write(strmsgencrypted.getBytes());		
    		   outputStream.flush();
    		   
    		  BufferedReader reader = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
@@ -446,7 +485,8 @@ public class HelloWorldRestController {
     		
     	}
     	
-    	private static byte[] blockCipher(byte[] bytes, int mode, Cipher cipher) throws IllegalBlockSizeException, BadPaddingException{
+    	private static byte[] blockCipher(byte[] bytes, int mode, Cipher cipher) throws IllegalBlockSizeException, BadPaddingException, NoSuchAlgorithmException, NoSuchPaddingException{
+    		
     		// string initialize 2 buffers.
     		// scrambled will hold intermediate results
     		byte[] scrambled = new byte[0];
@@ -454,7 +494,7 @@ public class HelloWorldRestController {
     		// toReturn will hold the total result
     		byte[] toReturn = new byte[0];
     		// if we encrypt we use 100 byte long blocks. Decryption requires 128 byte long blocks (because of RSA)
-    		int length = (1024 / 8 ) - 11 ;
+    		int length = (mode == Cipher.ENCRYPT_MODE)? 100 : 256;
 
     		// another buffer. this one will hold the bytes that have to be modified in this step
     		byte[] buffer = new byte[length];
@@ -480,6 +520,7 @@ public class HelloWorldRestController {
     			// copy byte into our buffer.
     			buffer[i%length] = bytes[i];
     		}
+
     		// this step is needed if we had a trailing buffer. should only happen when encrypting.
     		// example: we encrypt 110 bytes. 100 bytes per run means we "forgot" the last 10 bytes. they are in the buffer array
     		scrambled = cipher.doFinal(buffer);
@@ -500,7 +541,6 @@ public class HelloWorldRestController {
     		}
     		return toReturn;
     	}
-    	
     		
     		
 } 	
